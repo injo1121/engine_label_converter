@@ -14,10 +14,33 @@ import zipfile
 import json
 from utils import convert_coco_to_custom, compress_output
 
+# 파일 업로드 크기 제한을 5GB로 설정
+st.set_page_config(
+    page_title="COCO-Segmentation 변환기",
+    page_icon="🔄",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# 파일 업로드 크기 제한 설정 (5GB)
+st._config.set_option('server.maxUploadSize', 5120)
+
 def extract_zip(zip_path: str, extract_path: str) -> None:
     """ZIP 파일을 지정된 경로에 압축 해제합니다."""
     with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-        zip_ref.extractall(extract_path)
+        # 모든 파일 목록을 가져옵니다
+        file_list = zip_ref.namelist()
+        
+        # 이미지 파일만 필터링
+        image_files = [f for f in file_list if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp'))]
+        
+        # 각 이미지 파일을 지정된 경로에 압축 해제
+        for image_file in image_files:
+            # ZIP 내부 경로에서 파일명만 추출
+            file_name = Path(image_file).name
+            # 압축 해제 시 파일명만 사용하여 평면화된 구조로 저장
+            with zip_ref.open(image_file) as source, open(Path(extract_path) / file_name, 'wb') as target:
+                shutil.copyfileobj(source, target)
 
 def validate_coco_json(coco_path: str) -> dict:
     """COCO JSON 파일을 검증하고 필요한 정보를 반환합니다."""
@@ -35,26 +58,47 @@ def validate_coco_json(coco_path: str) -> dict:
 def find_image_files(image_dir: str) -> dict:
     """이미지 디렉토리에서 모든 이미지 파일을 찾아 매핑을 생성합니다."""
     image_files = {}
+    image_dir_path = Path(image_dir)
+    st.info(f"이미지 디렉토리 검색 중: {image_dir_path}")
+    
     for ext in ['.jpg', '.jpeg', '.png', '.bmp']:
-        for img_path in Path(image_dir).rglob(f'*{ext}'):
-            # 파일명만 사용하여 매핑
+        for img_path in image_dir_path.rglob(f'*{ext}'):
+            # 파일명만 사용하여 매핑 (실제 경로 저장)
             image_files[img_path.name] = str(img_path)
             # 파일명에서 확장자를 제외한 이름도 매핑
             image_files[img_path.stem] = str(img_path)
+    
+    # 디버깅을 위해 찾은 이미지 파일들 출력
+    st.info(f"찾은 이미지 파일들:")
+    for name, path in image_files.items():
+        st.info(f"- {name}: {path}")
+    
     return image_files
 
-def update_coco_image_paths(coco_data: dict, image_mapping: dict) -> dict:
-    """COCO JSON의 이미지 경로를 실제 파일 경로로 업데이트합니다."""
+def update_coco_image_paths(coco_data: dict, image_mapping: dict, use_relative_path: bool = False) -> dict:
+    """COCO JSON의 이미지 경로를 업데이트합니다."""
     updated_images = []
     missing_images = []
     
+    st.info(f"COCO 이미지 경로 업데이트 중 (use_relative_path: {use_relative_path})")
+    
     for img in coco_data['images']:
+        # 기존 경로에서 'images/' 접두사 제거
         file_name = Path(img['file_name']).name
+        original_path = img['file_name']
+        
         if file_name in image_mapping:
-            img['file_name'] = image_mapping[file_name]
+            if use_relative_path:
+                # 최종 JSON 파일에는 상대 경로로 저장
+                img['file_name'] = file_name
+            else:
+                # 실제 파일 경로 사용 (변환 과정)
+                img['file_name'] = image_mapping[file_name]
             updated_images.append(img)
+            st.info(f"이미지 경로 업데이트: {original_path} -> {img['file_name']}")
         else:
             missing_images.append(file_name)
+            st.warning(f"이미지를 찾을 수 없음: {file_name}")
     
     if missing_images:
         st.warning(f"다음 이미지 파일들을 찾을 수 없습니다: {', '.join(missing_images)}")
@@ -63,12 +107,6 @@ def update_coco_image_paths(coco_data: dict, image_mapping: dict) -> dict:
     return coco_data
 
 def main():
-    st.set_page_config(
-        page_title="COCO-Segmentation 변환기",
-        page_icon="🔄",
-        layout="wide"
-    )
-    
     st.title("COCO-Segmentation to Custom Format 변환기")
     st.markdown("""
     이 앱은 COCO Segmentation 형식의 JSON 데이터와 이미지 파일들을 입력으로 받아,
@@ -78,7 +116,7 @@ def main():
     # 사이드바 설정
     with st.sidebar:
         st.header("설정")
-        album_name = st.text_input("앨범 이름", value="injo_test")
+        album_name = st.text_input("앨범 이름", value="parmi_coco_converter")
     
     # 파일 업로드 섹션
     st.subheader("파일 업로드")
@@ -100,7 +138,7 @@ def main():
             "이미지가 포함된 ZIP 파일을 업로드하세요",
             type=['zip'],
             key="image_zip",
-            help="이미지 파일들이 포함된 ZIP 파일을 선택하세요."
+            help="이미지 파일들이 포함된 ZIP 파일을 선택하세요. (최대 5GB)",
         )
     
     # 변환 버튼
@@ -141,27 +179,52 @@ def main():
                     image_mapping = find_image_files(str(image_dir))
                     st.info(f"이미지 파일 매핑 생성 완료: {len(image_mapping)}개의 이미지 파일 발견")
                     
-                    # COCO JSON의 이미지 경로 업데이트
+                    # COCO JSON의 이미지 경로 업데이트 (실제 경로 사용)
                     updated_coco_data = update_coco_image_paths(coco_data, image_mapping)
                     st.info(f"COCO JSON 이미지 경로 업데이트 완료: {len(updated_coco_data['images'])}개의 이미지 경로 업데이트됨")
                     
-                    # 업데이트된 COCO JSON 저장
-                    with open(coco_path, 'w') as f:
-                        json.dump(updated_coco_data, f)
-                    
-                    # 출력 디렉토리 설정
-                    output_dir = temp_dir / "output"
-                    output_dir.mkdir(exist_ok=True)
-                    st.info(f"출력 디렉토리 생성: {output_dir}")
-                    
                     # 변환 수행
                     st.info("변환 작업 시작...")
+                    # 변환 전 디렉토리 구조 확인
+                    st.info(f"현재 디렉토리 구조:")
+                    st.info(f"- 임시 디렉토리: {temp_dir}")
+                    st.info(f"- 이미지 디렉토리: {image_dir}")
+                    st.info(f"- 이미지 파일 목록: {list(Path(image_dir).glob('*'))}")
+                    
+                    output_dir = temp_dir / "output"
+                    output_dir.mkdir(exist_ok=True)
+                    
+                    # COCO JSON 파일 내용 확인
+                    with open(coco_path, 'r') as f:
+                        current_coco = json.load(f)
+                        # 기존 이미지 경로에서 'images/' 접두사 제거
+                        for img in current_coco['images']:
+                            img['file_name'] = Path(img['file_name']).name
+                        # 업데이트된 내용 저장
+                        with open(coco_path, 'w') as f:
+                            json.dump(current_coco, f)
+                        
+                        st.info("현재 COCO JSON의 이미지 경로들:")
+                        for img in current_coco['images'][:5]:  # 처음 5개만 표시
+                            st.info(f"- {img['file_name']}")
+                    
                     convert_coco_to_custom(str(coco_path), str(image_dir), str(output_dir), album_name)
                     st.info("변환 작업 완료")
                     
+                    # 최종 JSON 파일에는 상대 경로로 업데이트
+                    final_json_path = temp_dir / "output" / "images" / album_name / "image.json"
+                    if final_json_path.exists():
+                        with open(final_json_path, 'r') as f:
+                            final_data = json.load(f)
+                        # 상대 경로로 업데이트 (images/ 접두사 제거)
+                        final_data = update_coco_image_paths(final_data, {}, use_relative_path=True)
+                        with open(final_json_path, 'w') as f:
+                            json.dump(final_data, f)
+                        st.info("최종 JSON 파일의 이미지 경로를 상대 경로로 업데이트 완료")
+                    
                     # 압축 수행
                     st.info("압축 작업 시작...")
-                    compress_output(str(output_dir), album_name, remove_original=False)
+                    compress_output(str(temp_dir / "output"), album_name, remove_original=False)
                     st.info("압축 작업 완료")
                     
                     # 생성된 .egd 파일 찾기
@@ -185,9 +248,9 @@ def main():
                         st.error("문제 해결을 위한 확인사항:")
                         st.markdown(f"""
                         1. 출력 디렉토리 확인:
-                           - `output_dir` 경로: {output_dir}
-                           - 디렉토리 존재 여부: {output_dir.exists()}
-                           - 디렉토리 내용: {list(output_dir.glob('*'))}
+                           - `output_dir` 경로: {temp_dir / "output"}
+                           - 디렉토리 존재 여부: {temp_dir / "output".exists()}
+                           - 디렉토리 내용: {list(temp_dir / "output".glob('*'))}
                         
                         2. 압축 파일 검색 경로 확인:
                            - 검색 패턴: segment-{album_name}-rev1-*.egd
