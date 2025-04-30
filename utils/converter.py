@@ -88,33 +88,25 @@ def convert_coco_to_custom(coco_json_path: str, image_dir: str, output_dir: str,
         annotations = []
         mask = np.zeros((height, width), dtype=np.uint8)
         
-        # 라벨별 데이터 카운터 초기화
-        label_counter = {}
-        
         if image_id in annotations_map:
-            for ann in annotations_map[image_id]:
-                # segmentation mask 생성
+            for idx, ann in enumerate(annotations_map[image_id], start=1):
+                # segmentation mask 생성 (0 또는 1 값)
                 seg_mask = polygon_to_mask(width, height, ann['segmentation'])
-                mask = np.maximum(mask, seg_mask)
                 
-                # 라벨 가져오기
+                # 객체별 idx 값을 마스크에 할당 (덮어쓰기 방식)
+                mask[seg_mask == 1] = idx
+                
+                # 라벨과 bbox
                 label = category_map[ann['category_id']]
-                
-                # 라벨별 카운터 증가
-                if label not in label_counter:
-                    label_counter[label] = 1
-                else:
-                    label_counter[label] += 1
-                
-                # bbox를 정수형으로 변환
                 bbox = [int(coord) for coord in ann['bbox']]
                 
                 annotations.append({
                     "type": "seg",
                     "bbox": bbox,
                     "label": label,
-                    "data": label_counter[label]
+                    "data": idx,  # mask 상의 ID와 매칭
                 })
+
         
         image_map_json = {
             "id": image_id * 1000,  # 임시 값
