@@ -12,6 +12,7 @@ Author: injokim <injo1121@rtm.ai>
 import json
 import os
 from pathlib import Path
+from typing import Callable, Optional
 import numpy as np
 from PIL import Image
 import datetime
@@ -21,7 +22,12 @@ from .image_utils import polygon_to_mask, resize_keep_aspect
 from .encoding_utils import encode_rle, calculate_crc
 from .metadata_utils import create_collection_metadata
 
-def convert_coco_to_custom(coco_json_path: str, image_dir: str, output_dir: str, album_name: str):
+def convert_coco_to_custom(
+    coco_json_path: str,
+    image_dir: str,
+    output_dir: str,
+    album_name: str,
+    progress_callback: Optional[Callable[[int], None]] = None):
     """COCO 포맷을 Custom 포맷으로 변환합니다."""
     # 출력 디렉토리 생성
     output_dir = Path(output_dir)
@@ -37,6 +43,7 @@ def convert_coco_to_custom(coco_json_path: str, image_dir: str, output_dir: str,
     # 이미지와 어노테이션 매핑
     image_map = {img['id']: img for img in coco_data['images']}
     annotations_map = {}
+
     for ann in coco_data['annotations']:
         if ann['image_id'] not in annotations_map:
             annotations_map[ann['image_id']] = []
@@ -46,7 +53,7 @@ def convert_coco_to_custom(coco_json_path: str, image_dir: str, output_dir: str,
     category_map = {cat['id']: cat['name'] for cat in coco_data['categories']}
     
     # 각 이미지에 대해 처리
-    for image_id, image_info in tqdm(image_map.items(), desc="Converting images"):
+    for count, (image_id, image_info) in enumerate(image_map.items(), start=1):
         image_name = image_info['file_name']
         image_path = Path(image_dir) / image_name
         
@@ -107,6 +114,9 @@ def convert_coco_to_custom(coco_json_path: str, image_dir: str, output_dir: str,
                     "data": idx,  # mask 상의 ID와 매칭
                 })
 
+        if progress_callback:
+            progress_callback(count) 
+
         
         image_map_json = {
             "id": image_id * 1000,  # 임시 값
@@ -130,4 +140,6 @@ def convert_coco_to_custom(coco_json_path: str, image_dir: str, output_dir: str,
             json.dump(image_json, f, indent=2)
         
         with open(image_output_dir / 'image_map.json', 'w') as f:
-            json.dump(image_map_json, f, indent=2) 
+            json.dump(image_map_json, f, indent=2)
+
+        

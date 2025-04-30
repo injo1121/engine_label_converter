@@ -22,9 +22,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 파일 업로드 크기 제한 설정 (5GB)
-st._config.set_option('server.maxUploadSize', 5120)
-
 def extract_zip(zip_path: str, extract_path: str) -> None:
     """ZIP 파일을 지정된 경로에 압축 해제합니다."""
     with zipfile.ZipFile(zip_path, 'r') as zip_ref:
@@ -68,11 +65,6 @@ def find_image_files(image_dir: str) -> dict:
             # 파일명에서 확장자를 제외한 이름도 매핑
             image_files[img_path.stem] = str(img_path)
     
-    # 디버깅을 위해 찾은 이미지 파일들 출력
-    st.info(f"찾은 이미지 파일들:")
-    for name, path in image_files.items():
-        st.info(f"- {name}: {path}")
-    
     return image_files
 
 def update_coco_image_paths(coco_data: dict, image_mapping: dict, use_relative_path: bool = False) -> dict:
@@ -95,7 +87,6 @@ def update_coco_image_paths(coco_data: dict, image_mapping: dict, use_relative_p
                 # 실제 파일 경로 사용 (변환 과정)
                 img['file_name'] = image_mapping[file_name]
             updated_images.append(img)
-            st.info(f"이미지 경로 업데이트: {original_path} -> {img['file_name']}")
         else:
             missing_images.append(file_name)
             st.warning(f"이미지를 찾을 수 없음: {file_name}")
@@ -189,7 +180,18 @@ def main():
                     st.info(f"현재 디렉토리 구조:")
                     st.info(f"- 임시 디렉토리: {temp_dir}")
                     st.info(f"- 이미지 디렉토리: {image_dir}")
-                    st.info(f"- 이미지 파일 목록: {list(Path(image_dir).glob('*'))}")
+                    st.info("egd 형식으로 변환중..")
+                            
+                    total_images = len(updated_coco_data['images'])
+                    # 진행률 바 초기화
+                    progress_bar = st.progress(0.0)
+                    percent_text = st.empty()
+
+                    def progress_callback(processed):
+                        frac = processed / total_images
+                        frac = min(max(frac, 0.0), 1.0)
+                        progress_bar.progress(frac)
+                        percent_text.text(f"{processed}/{total_images} 처리됨 ({frac*100:.1f}%)")
                     
                     output_dir = temp_dir / "output"
                     output_dir.mkdir(exist_ok=True)
@@ -203,12 +205,15 @@ def main():
                         # 업데이트된 내용 저장
                         with open(coco_path, 'w') as f:
                             json.dump(current_coco, f)
-                        
-                        st.info("현재 COCO JSON의 이미지 경로들:")
-                        for img in current_coco['images'][:5]:  # 처음 5개만 표시
-                            st.info(f"- {img['file_name']}")
                     
-                    convert_coco_to_custom(str(coco_path), str(image_dir), str(output_dir), album_name)
+                    # 변환 함수 호출
+                    convert_coco_to_custom(
+                        str(coco_path),
+                        str(image_dir),
+                        str(output_dir),
+                        album_name,
+                        progress_callback=progress_callback
+                    )
                     st.info("변환 작업 완료")
                     
                     # 최종 JSON 파일에는 상대 경로로 업데이트
