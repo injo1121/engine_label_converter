@@ -105,11 +105,17 @@ def convert_coco_to_custom(
                 
                 # 라벨과 bbox
                 label = category_map[ann['category_id']]
-                bbox = [int(coord) for coord in ann['bbox']]
+                x, y, w, h = [int(c) for c in ann['bbox']]
+
+                # COCO → VOC
+                x_min = x
+                y_min = y
+                x_max = x + w
+                y_max = y + h
                 
                 annotations.append({
                     "type": "seg",
-                    "bbox": bbox,
+                    "bbox": [x_min, y_min, x_max, y_max],
                     "label": label,
                     "data": idx,  # mask 상의 ID와 매칭
                 })
