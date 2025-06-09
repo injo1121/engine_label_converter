@@ -12,7 +12,7 @@ import datetime
 from pathlib import Path
 from typing import Dict, List
 
-def create_collection_metadata(output_dir: str, categories: List[Dict], album_name: str) -> None:
+def create_collection_metadata(output_dir: str, categories: List[Dict], album_name: str, is_object_detection: bool = False) -> None:
     """컬렉션 메타데이터 JSON 파일을 생성합니다."""
     now = datetime.datetime.now().isoformat()
     
@@ -31,7 +31,7 @@ def create_collection_metadata(output_dir: str, categories: List[Dict], album_na
         "collection": {
             "id": 11,
             "name": album_name,
-            "task": "segment",
+            "task": "segment" if not is_object_detection else "detect",
             "created_at": now,
             "updated_at": now
         }
