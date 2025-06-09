@@ -113,12 +113,14 @@ def convert_coco_to_custom(
                     # 라벨
                     label = category_map[ann['category_id']]
                     
-                    annotations.append({
-                        "type": "box",
-                        "bbox": [x_min, y_min, x_max, y_max],
-                        "label": label,
-                        "data": [[x_min, y_min], [x_max, y_max]]
-                    })
+                    # x_max가 x_min보다 크고, y_max가 y_min보다 큰 경우에만 추가
+                    if x_max > x_min and y_max > y_min:
+                        annotations.append({
+                            "type": "box",
+                            "bbox": [x_min, y_min, x_max, y_max],
+                            "label": label,
+                            "data": [[x_min, y_min], [x_max, y_max]]
+                        })
             else:
                 # Segmentation 처리
                 mask = np.zeros((height, width), dtype=np.uint8)
@@ -139,12 +141,14 @@ def convert_coco_to_custom(
                     x_max = x + w
                     y_max = y + h
                     
-                    annotations.append({
-                        "type": "seg",
-                        "bbox": [x_min, y_min, x_max, y_max],
-                        "label": label,
-                        "data": idx,  # mask 상의 ID와 매칭
-                    })
+                    # x_max가 x_min보다 크고, y_max가 y_min보다 큰 경우에만 추가
+                    if x_max > x_min and y_max > y_min:
+                        annotations.append({
+                            "type": "seg",
+                            "bbox": [x_min, y_min, x_max, y_max],
+                            "label": label,
+                            "data": idx,  # mask 상의 ID와 매칭
+                        })
 
             # 공통 JSON 구조 생성
             image_map_json = {
