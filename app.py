@@ -105,6 +105,7 @@ def main():
     
     with tab1:
         st.markdown("""
+        ## Segmentation Label 변환
         이 앱은 COCO Segmentation 형식의 JSON 데이터와 이미지 파일들을 입력으로 받아,
         Custom 포맷으로 변환된 라벨 및 리사이즈된 이미지 파일을 출력합니다.
         """)
@@ -284,6 +285,7 @@ def main():
 
     with tab2:
         st.markdown("""
+        ## Object Detection Label 변환
         이 앱은 COCO Object Detection 형식의 JSON 데이터와 이미지 파일들을 입력으로 받아,
         Custom 포맷으로 변환된 라벨 및 리사이즈된 이미지 파일을 출력합니다.
         """)
