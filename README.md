@@ -1,6 +1,6 @@
-# COCO-Segmentation to Custom Format 변환기
+# COCO to Custom Format 변환기
 
-이 프로그램은 COCO Segmentation 형식의 JSON 데이터와 이미지 파일들을 입력으로 받아, 사용자 정의(Custom) 포맷으로 변환된 라벨 및 리사이즈된 이미지 파일을 출력하는 변환기입니다.
+이 프로그램은 COCO Segmentation 또는 Objec Detection 형식의 JSON 데이터와 이미지 파일들을 입력으로 받아, 사용자 정의(Custom) 포맷으로 변환된 라벨 및 리사이즈된 이미지 파일을 출력하는 변환기입니다.
 
 ## 설치 방법
 
@@ -17,15 +17,22 @@ pip install -r requirements.txt
 
 ## 사용 방법
 
+- streamlit으로 실행(권장)
+```bash
+streamlit run app.py
+```
+
+<br>
+
+- 프로그램 직접 실행(권장 X)
 ```bash
 python main.py --coco_json <path_to_coco_json> --image_dir <path_to_images> --output_dir <path_to_output>
 ```
 
-### 매개변수 설명
-
-- `--coco_json`: COCO 형식의 JSON 파일 경로
-- `--image_dir`: 이미지 파일들이 있는 디렉토리 경로
-- `--output_dir`: 변환된 결과를 저장할 디렉토리 경로
+- 매개변수 설명
+    - `--coco_json`: COCO 형식의 JSON 파일 경로
+    - `--image_dir`: 이미지 파일들이 있는 디렉토리 경로
+    - `--output_dir`: 변환된 결과를 저장할 디렉토리 경로
 
 ## 출력 구조
 
