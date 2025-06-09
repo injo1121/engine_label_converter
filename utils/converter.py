@@ -113,8 +113,8 @@ def convert_coco_to_custom(
                     # 라벨
                     label = category_map[ann['category_id']]
                     
-                    # x_max가 x_min보다 크고, y_max가 y_min보다 큰 경우에만 추가
-                    if x_max > x_min and y_max > y_min:
+                    # x_max가 x_min보다 5픽셀 이상 크고, y_max가 y_min보다 5픽셀 이상 큰 경우에만 추가
+                    if (x_max - x_min > 5) and (y_max - y_min > 5):
                         annotations.append({
                             "type": "box",
                             "bbox": [x_min, y_min, x_max, y_max],
@@ -141,8 +141,8 @@ def convert_coco_to_custom(
                     x_max = x + w
                     y_max = y + h
                     
-                    # x_max가 x_min보다 크고, y_max가 y_min보다 큰 경우에만 추가
-                    if x_max > x_min and y_max > y_min:
+                    # x_max가 x_min보다 5픽셀 이상 크고, y_max가 y_min보다 5픽셀 이상 큰 경우에만 추가
+                    if (x_max - x_min > 5) and (y_max - y_min > 5):
                         annotations.append({
                             "type": "seg",
                             "bbox": [x_min, y_min, x_max, y_max],
