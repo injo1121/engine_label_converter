@@ -398,6 +398,7 @@ def main():
                             str(image_dir),
                             str(output_dir),
                             album_name_od,
+                            is_object_detection=True,
                             progress_callback=progress_callback
                         )
                         st.info("변환 작업 완료")

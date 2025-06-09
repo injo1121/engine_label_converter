@@ -1,5 +1,5 @@
 """
-COCO Segmentation 형식을 Custom 형식으로 변환하는 모듈입니다.
+COCO Segmentation 및 Object Detection 형식을 Custom 형식으로 변환하는 모듈입니다.
 주요 기능:
 - COCO JSON 데이터 파싱
 - 이미지 및 어노테이션 매핑
@@ -27,6 +27,7 @@ def convert_coco_to_custom(
     image_dir: str,
     output_dir: str,
     album_name: str,
+    is_object_detection: bool = False,
     progress_callback: Optional[Callable[[int], None]] = None):
     """COCO 포맷을 Custom 포맷으로 변환합니다."""
     # 출력 디렉토리 생성
@@ -38,7 +39,11 @@ def convert_coco_to_custom(
         coco_data = json.load(f)
     
     # 컬렉션 메타데이터 생성
-    create_collection_metadata(output_dir, coco_data['categories'], album_name)
+    create_collection_metadata(output_dir=output_dir, 
+                               categories=coco_data['categories'], 
+                               album_name=album_name,
+                               is_object_detection=is_object_detection
+                               )
     
     # 이미지와 어노테이션 매핑
     image_map = {img['id']: img for img in coco_data['images']}
@@ -93,53 +98,78 @@ def convert_coco_to_custom(
         
         # image_map.json 생성
         annotations = []
-        mask = np.zeros((height, width), dtype=np.uint8)
         
         if image_id in annotations_map:
-            for idx, ann in enumerate(annotations_map[image_id], start=1):
-                # segmentation mask 생성 (0 또는 1 값)
-                seg_mask = polygon_to_mask(width, height, ann['segmentation'])
-                
-                # 객체별 idx 값을 마스크에 할당 (덮어쓰기 방식)
-                mask[seg_mask == 1] = idx
-                
-                # 라벨과 bbox
-                label = category_map[ann['category_id']]
-                x, y, w, h = [int(c) for c in ann['bbox']]
+            if is_object_detection:
+                # Object Detection 처리
+                for ann in annotations_map[image_id]:
+                    # bbox 좌표 변환 (COCO → VOC)
+                    x, y, w, h = [int(c) for c in ann['bbox']]
+                    x_min = x
+                    y_min = y
+                    x_max = x + w
+                    y_max = y + h
+                    
+                    # 라벨
+                    label = category_map[ann['category_id']]
+                    
+                    annotations.append({
+                        "type": "box",
+                        "bbox": [x_min, y_min, x_max, y_max],
+                        "label": label,
+                        "data": [[x_min, y_min], [x_max, y_max]]
+                    })
+            else:
+                # Segmentation 처리
+                mask = np.zeros((height, width), dtype=np.uint8)
+                for idx, ann in enumerate(annotations_map[image_id], start=1):
+                    # segmentation mask 생성 (0 또는 1 값)
+                    seg_mask = polygon_to_mask(width, height, ann['segmentation'])
+                    
+                    # 객체별 idx 값을 마스크에 할당 (덮어쓰기 방식)
+                    mask[seg_mask == 1] = idx
+                    
+                    # 라벨과 bbox
+                    label = category_map[ann['category_id']]
+                    x, y, w, h = [int(c) for c in ann['bbox']]
 
-                # COCO → VOC
-                x_min = x
-                y_min = y
-                x_max = x + w
-                y_max = y + h
-                
-                annotations.append({
-                    "type": "seg",
-                    "bbox": [x_min, y_min, x_max, y_max],
-                    "label": label,
-                    "data": idx,  # mask 상의 ID와 매칭
-                })
+                    # COCO → VOC
+                    x_min = x
+                    y_min = y
+                    x_max = x + w
+                    y_max = y + h
+                    
+                    annotations.append({
+                        "type": "seg",
+                        "bbox": [x_min, y_min, x_max, y_max],
+                        "label": label,
+                        "data": idx,  # mask 상의 ID와 매칭
+                    })
+
+            # 공통 JSON 구조 생성
+            image_map_json = {
+                "id": image_id * 1000,  # 임시 값
+                "collection_revision_id": 11,  # 임시 값
+                "is_label_confirmed": True,
+                "data": {
+                    "annotations": annotations,
+                    "imageClass": "",
+                    "imageHeight": height,
+                    "imageWidth": width,
+                    "mask": []
+                },
+                "image": image_json,
+                "split": "default",
+                "created_at": datetime.datetime.now().isoformat(),
+                "updated_at": datetime.datetime.now().isoformat()
+            }
+
+            # Segmentation인 경우에만 mask 데이터 추가
+            if not is_object_detection:
+                image_map_json["data"]["mask"] = encode_rle(mask)
 
         if progress_callback:
-            progress_callback(count) 
-
-        
-        image_map_json = {
-            "id": image_id * 1000,  # 임시 값
-            "collection_revision_id": 11,  # 임시 값
-            "is_label_confirmed": True,
-            "data": {
-                "annotations": annotations,
-                "imageClass": "",
-                "imageHeight": height,
-                "imageWidth": width,
-                "mask": encode_rle(mask)
-            },
-            "image": image_json,
-            "split": "default",
-            "created_at": datetime.datetime.now().isoformat(),
-            "updated_at": datetime.datetime.now().isoformat()
-        }
+            progress_callback(count)
         
         # JSON 파일 저장
         with open(image_output_dir / 'image.json', 'w') as f:
